@@ -55,10 +55,9 @@ happened; these entries are the toolkit's own timeline.
 All four entries are graded. Keep every heading below, and fill each
 one in the week it belongs to.
 
-**Unit 5: [one line on the tool work]**
+**Unit 5: built issue-scout and wrote a search strategy that finds real GitHub issues**
 
-[2-4 sentences: what you built (the scout, your strategy), what broke
-or fell short, what changed because of it.]
+I upgraded my Unit 1 `issue-select` skill into `issue-scout`, writing a `search-strategy.md` with two `gh search issues` queries tied to my fit profile and five ranking filters over free result fields. The first scan exposed a real gap: my rubric had no check for whether an issue was actually a small, bounded piece of code work, so a docs-only README reorganization and a research-scale infrastructure feature both passed. I added a required `bounded-scope` check and a second ranking tie-break (most-recently-updated), then confirmed the fix by re-grading real candidates: it correctly rejected an issue that only described a symptom with no named fix, while still accepting a genuinely bounded one.
 
 **Unit 6: [one line on the tool work]**
 
