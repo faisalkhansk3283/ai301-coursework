@@ -11,7 +11,7 @@ files and no evidence uploads are part of Assignment 5.
 **Student:** Faisal Rasheed Khan
 **GitHub Username:** faisalkhansk3283
 **Issue:** https://github.com/davidcasr/colombia-open/issues/14
-**Pull Request:** [GitHub PR link, once opened]
+**Pull Request:** https://github.com/davidcasr/colombia-open/pull/19
 
 One repository, built across units 5 to 8, telling the whole story of your real
 contribution. Fill it as you work, not at the end — the sections below ask for evidence that
@@ -62,10 +62,9 @@ I upgraded my Unit 1 `issue-select` skill into `issue-scout`, writing a `search-
 
 I installed the voice guard (a PreToolUse hook that checks every outgoing `gh` comment against my voice guide before it posts) and wrote an Upstream section with rules for claims, questions, and pings. The wiring test initially passed unblocked because the model answered `gh issue comment --help` from its own knowledge instead of actually invoking the Bash tool — once I forced a real tool call, the guard correctly stopped it. Separately, the hook's own command called `python3`, which is a broken Windows Store stub on my machine (the same issue I'd hit back in Unit 1), so I had to change it to `python` and hardcode my absolute home path since `$HOME` wasn't expanding in the hook's execution context. I also wrote `CLAUDE.local.md` for my claimed issue's repo, distilling `CONTRIBUTING.md`'s conventions and a scoped read of the two files my issue touches, and excluded it via `.git/info/exclude` so it never reaches my PR diff.
 
-**Unit 7: [one line on the tool work]**
+**Unit 7: installed the ship-gate, wrote a manifest, and got a clean PASS on the first try**
 
-[2-4 sentences: the ship-gate and your gate manifest. What it produced
-on your real branch, what fought you, what changed because of it.]
+I installed the ship-gate (a hook that runs my manifest's checks, then `pr-precheck`, before Claude Code can open a PR) and wrote `ship-manifest.md` for `colombia-open`. My first draft listed `make check`, exactly as `CONTRIBUTING.md` says, but testing it in a fresh terminal revealed `make check` depends on `make build`, which crashed with a `MemoryError` fetching a live dataset — unrelated to my test-only fix. I narrowed the manifest to `make test`/`lint`/`typecheck`/`doctor` and logged the excluded `make build` failure with a dated reason instead of silently dropping it. The ship-gate then passed on the first real run, and `pr-precheck` accepted all four required checks. The only real friction was mechanical: PowerShell's quoting rules broke the literal `gh pr create` command string twice before I switched to describing the command in plain language and letting Claude Code construct its own correctly-quoted call.
 
 **Unit 8: [one line on the tool work]**
 
@@ -139,26 +138,44 @@ picking an issue.
 
 **Problem Description**
 
-[In your own words, what is broken or missing?]
+`src/builders/formats.py` holds two functions, `write_parquet_atomic` and
+`write_json_atomic`, that write the library's published `.parquet`/`.json` outputs
+atomically (temp file, then `os.replace()`, so a crash mid-write never leaves a half-written
+file). Despite being the code that produces every file the project's users download, this
+module currently has 0% test coverage — no existing test imports it at all.
 
 **Expected Behavior**
 
-[What should happen?]
+The module should have tests covering: the happy path (write then read back with
+`pl.read_parquet`/`pl.read_json`, confirming data round-trips correctly, including that a
+leading-zero administrative code like `"05"` survives as a string and doesn't silently
+become the int `5`); directory auto-creation when the target's parent doesn't exist; no
+leftover `.{name}.*.tmp` files after a successful write; and a failed write (simulated via
+`monkeypatch`) leaving neither the target file nor the temp file behind.
 
 **Current Behavior**
 
-[What actually happens?]
+I confirmed the 0% figure myself: running the full test suite with coverage scoped to this
+module produces `Module src.builders.formats was never imported` / `No data was collected`
+— not a low percentage, but literal zero executions of any line in the file by any existing
+test.
 
 **Affected Components**
 
-[Which parts of the codebase are involved?]
+`src/builders/formats.py` (the two functions above) and `src/builders/_shared.py`
+(`ensure_normalized_dir()`, which both functions call as a side effect and which my tests
+need to neutralize with `monkeypatch` so they don't touch the real repo's `data/normalized/`
+directory). The fix is purely additive — a new file, `tests/builders/test_formats.py` — with
+no production code changes.
 
 **Toolkit**
 
-- Tool:
-- What it produced:
-- Difficulties:
-- What changed:
+- Tool: `repro-check` (graded my repro report and claim comment together).
+- What it produced: an `accept` verdict, after flagging two sentences that overstated what
+  my evidence actually showed (see Reproduction Process Toolkit block above for detail).
+- Difficulties: none beyond what's already logged in Reproduction Process — this section is
+  a restatement of that same verified finding in the story's required format.
+- What changed: nothing new here; see Reproduction Process for the actual revisions.
 
 ---
 
@@ -230,45 +247,114 @@ run.
 
 **Analysis**
 
-[Your analysis of the root cause: what is causing the issue, traced
-to the files and functions involved.]
+This isn't a bug with a root cause to trace — it's a coverage gap. `write_parquet_atomic`
+and `write_json_atomic` in `src/builders/formats.py` were never given tests when written, so
+`coverage` reports the module as never imported by any test. Both functions share the same
+shape: call `ensure_normalized_dir()` (a side effect in `src/builders/_shared.py` that
+creates `data/normalized/`), create the target's parent directory, write to a temp file via
+`tempfile.mkstemp`, `os.replace()` it into place, then a `finally` block that removes the
+temp file if it still exists (a no-op on success, since `os.replace` already moved it away;
+the real cleanup path is on failure).
+
+Confirmed before writing any tests, on `main`:
+
+```
+$ .venv/Scripts/pytest tests/ --cov=src.builders.formats --cov-report=term
+collected 283 items
+[... 283 passed ...]
+.venv\Lib\site-packages\coverage\inorout.py:560: CoverageWarning: Module src.builders.formats
+was never imported.(module-not-imported)
+.venv\Lib\site-packages\coverage\control.py:967: CoverageWarning: No data was collected.
+(no-data-collected)
+WARNING: Failed to generate report: No data to report.
+```
+
+This matches the issue's own claim of 0% coverage exactly — stronger, even, since it shows
+the module was never imported at all, not just under-tested.
 
 **Proposed Solution**
 
-[High-level description of your fix approach, and what you are
-deliberately NOT changing.]
+Add `tests/builders/test_formats.py` covering exactly the four cases the issue names, and
+nothing else. I am **not** changing any production code in `formats.py` or `_shared.py` — no
+production code changes are planned; the tests I write are what will show whether the
+functions behave correctly. I am also not adding tests beyond the four named cases (e.g. no
+new edge cases I thought of myself), to keep the PR scoped to what the issue actually asked
+for.
 
 **Implementation Plan**
 
-1. [Modify file X to do Y]
-2. [Add or change Z]
-3. [Update tests]
+1. Create `tests/builders/test_formats.py`, following the flat-function style of
+   `tests/builders/test_datasets.py` (no custom fixtures/classes, plain `def test_*()`
+   functions; pytest's built-in `tmp_path` and `monkeypatch` fixtures are used directly).
+2. `test_write_parquet_atomic_roundtrip` / `test_write_json_atomic_roundtrip`: build a small
+   `pl.DataFrame` including a leading-zero string code (e.g. `{"cod_dpto": ["05", "08"]}`,
+   matching hard rule #2 in `CLAUDE.md`), write it with each function to a `tmp_path`, read
+   it back with `pl.read_parquet`/`pl.read_json`, and assert it equals the original
+   (including that `cod_dpto` round-trips as strings, not ints).
+3. `test_write_atomic_creates_parent_directory`: call with a `path` whose parent doesn't
+   exist yet under `tmp_path`, assert the directory gets created and the file is written.
+4. `test_write_atomic_leaves_no_temp_file`: after a successful write, assert no
+   `.{name}.*.tmp` file remains in the target directory (glob the parent for the temp
+   pattern and assert it's empty).
+5. `test_write_atomic_failure_leaves_no_debris`: use `monkeypatch` to make
+   `pl.DataFrame.write_parquet`/`write_json` raise, assert neither the target file nor any
+   temp file exists afterward.
+6. In every test, use `monkeypatch` to stub `ensure_normalized_dir()` as a no-op (per the
+   issue's own "Ojo" note), so tests never touch the real repo's `data/normalized/`.
+7. Re-run the same command as the before-evidence above, and confirm it now reports real
+   coverage of `formats.py` instead of "never imported." Also run `make test`, `make lint`,
+   `make typecheck`, `make doctor` (my manifest's checks; `make build` is excluded there — a
+   pre-existing `MemoryError` fetching a dataset on `main`, unrelated to this fix, disclosed
+   in `ship-manifest.md`'s excluded table).
 
-[Record deviations here as they happen: what changed mid-build and
-why. A recorded deviation is honest work; silent drift is not.]
+(No deviations recorded yet — this section will be updated if the build departs from this
+plan.)
 
 **Toolkit**
 
-- Tool:
-- What it produced:
-- Difficulties:
-- What changed:
+- Tool: `plan-check` (grades my plan and draft plan comment together before building; plan
+  stays local per the wild scope, never posted to the issue thread).
+- What it produced: `reject` on the first pass — two required checks (`diagnosis`, `test`)
+  came back `unclear` because my plan asserted the coverage gap without quoting any actual
+  command output in the drafts themselves (my Unit 6 repro evidence lived only in this story
+  file, not in `plan.md`). `accept` after quoting the real `pytest --cov` run directly in
+  both `plan.md` and `plan-comment.md`.
+- Difficulties: a voice-guide catch survived even after the accept-worthy fix: "the
+  functions already behave correctly" claimed a result my tests hadn't run yet.
+- What changed: quoted the coverage-run output in both drafts; reworded the overclaiming
+  sentence to state only that no production changes are planned, not that correctness is
+  already proven.
 
 ---
 
 ## Testing Strategy
 
-[What observable checks prove the fix: your reproduction steps re-run
-against the built change (before and after), and the repo's own test
-suite or checks with the outcome shown. "Tests pass" with nothing
-observable named is not a strategy.]
+The observable check is the exact same coverage command, run on `main` before and on my
+branch after. **Before:** `coverage` reports `Module src.builders.formats was never
+imported` / `No data was collected` — literal zero lines executed. **After:** `5 passed`,
+`96%` coverage on `src/builders/formats.py` (one line missed, disclosed below). Full output
+of both runs, plus `make test`/`make lint`/`make typecheck`/`make doctor`, is in
+`test_evidence.md`.
+
+Beyond the coverage swing itself, each of the 5 new tests proves one specific observable
+behavior named in the issue: a round-trip read-back for each format (including that a
+leading-zero string code survives, not silently becoming an int), parent-directory
+auto-creation, no leftover `.{name}.*.tmp` file after success, and no leftover file (target
+or temp) after a simulated failure. The one uncovered line (`write_json_atomic`'s
+failure-path cleanup) is disclosed rather than hidden: my single failure test only exercises
+`write_parquet_atomic`, matching the issue's own example wording.
+
+The full existing suite (283 tests) plus the 5 new ones (288 total) pass together, so the
+new tests don't just pass in isolation — they coexist cleanly with everything else.
 
 **Toolkit**
 
-- Tool:
-- What it produced:
-- Difficulties:
-- What changed:
+- Tool: none new — the testing itself was done directly with `pytest`/`coverage`/`make`, not
+  through a course skill. `repro-check`'s before/after evidence pattern (from Units 2 and 6)
+  is what shaped how I structured this comparison.
+- What it produced: the before/after coverage swing in `test_evidence.md`.
+- Difficulties: none beyond `make build`'s pre-existing `MemoryError`, already logged.
+- What changed: nothing new here.
 
 ---
 
@@ -277,46 +363,85 @@ observable named is not a strategy.]
 [A running log, added to as you work. Date each entry. What you
 built, decisions you made when you made them, wrong turns included.]
 
-**[Date]**
+**2026-11-06**
 
-[Entry]
+Installed the ship-gate (Unit 7) and wrote `ship-manifest.md`. First attempt listed `make
+check` as the required gate, following `CONTRIBUTING.md`'s own wording literally — but
+running it myself revealed `make check` depends on `make build`, which runs the full live
+data-extraction pipeline across every source and crashed with a `MemoryError` fetching the
+Saber11 education dataset on this machine. That's unrelated to my fix (test coverage only,
+no extractor touched), so I swapped the manifest to the narrower `make test`/`make lint`/
+`make typecheck`/`make doctor`, and logged `make build`'s failure in the manifest's
+"Excluded" table with today's date and the reason, rather than silently dropping it.
 
-**[Date]**
+Also decided to start building (writing the actual test file) before the maintainer
+assigned the issue, even though my claim comment said I'd wait. No response after about a
+day, and Unit 7's course deadline doesn't wait either. This is a deliberate, disclosed
+deviation from what I promised in the claim comment — not a silent one — and I'm noting it
+here and will note it again in the PR description.
 
-[Entry]
+**2026-11-06 (later)**
+
+Wrote `tests/builders/test_formats.py` exactly per the plan: 5 tests (parquet round-trip,
+JSON round-trip, parent-directory creation, no-leftover-temp-file, failed-write-leaves-no-
+debris), each stubbing `ensure_normalized_dir()` with `monkeypatch` individually (no custom
+fixtures, per the plan). Ran clean on the first try: `pytest tests/builders/test_formats.py
+--cov=src.builders.formats --cov-report=term-missing` → 5 passed, 96% coverage, one line
+missed (line 38, the temp-file cleanup inside `write_json_atomic`'s failure path) — my
+single failure test only exercises `write_parquet_atomic`'s failure path, matching the
+issue's own wording, which names `write_parquet` as its example. Disclosing this rather
+than padding in an extra test to chase 100% the issue didn't ask for. Full manifest
+(`make test`, `make lint`, `make typecheck`, `make doctor`) all green: 288 tests passed
+(283 existing + 5 new), lint clean, typecheck clean, doctor clean. Committed as
+`test: agregar tests para builders/formats.py` on branch `test/14-formats-coverage`.
 
 **Toolkit**
 
-- Tool:
-- What it produced:
-- Difficulties:
-- What changed:
+- Tool: none new this entry (plan-check already covered in Solution Approach; this section
+  is the build log itself).
+- What it produced: a committed, fully-passing test file.
+- Difficulties: `make check`'s dependency on `make build` (see first entry above).
+- What changed: narrowed the manifest's required checks and disclosed the excluded one.
 
 ---
 
 ## Pull Request
 
-**PR Link:** [GitHub PR URL when opened]
+**PR Link:** https://github.com/davidcasr/colombia-open/pull/19
 
-**PR Description:** [what the PR says; much of the content above
-adapts into it]
+**PR Description:** Explains the 0% coverage gap (confirmed with a quoted `coverage` run
+before any tests existed), what the new `tests/builders/test_formats.py` covers (the four
+cases from the issue), the before/after coverage swing (0% → 96%, one line disclosed as
+uncovered), every manifest check's output (`make test`/`lint`/`typecheck`/`doctor` green,
+`make build` excluded with a named, pre-existing `MemoryError` unrelated to this change), the
+AI-use disclosure (Claude Code, named skills used, diff reviewed and understood), and an
+explicit note that I built this before receiving an assignment, despite my claim comment
+saying I'd wait — disclosed rather than left silent.
 
 **Maintainer Feedback:**
 
-- [Date]: [feedback received, or "none yet"; silence is a normal
-  state and costs you nothing]
-- [Date]: [how you addressed it]
+- 2026-11-06: none yet (PR just opened)
 
-**Status:** [Awaiting review / Iterating / Merged / Closed. The
-status is a fact you record, never a grade: the PR is graded as
-opened.]
+**Status:** Awaiting review
 
 **Toolkit**
 
-- Tool:
-- What it produced:
-- Difficulties:
-- What changed:
+- Tool: `ship-gate` (runs my manifest's checks, then `pr-precheck` in live mode, before
+  Claude Code is allowed to open the PR).
+- What it produced: `ship-gate: PASS` on the first attempt — all 4 manifest checks green,
+  and `pr-precheck` accepted on all 4 required checks (`plan-fidelity`, `test-evidence`,
+  `diff-quality`, `standards-comms`).
+- Difficulties: the hook-wiring test (`gh pr create --help`) only showed one stop
+  (ship-gate's) instead of the expected two (voice-guard's too) — both hooks verified
+  individually working on their own trigger commands, so I treated this as a display quirk
+  in how Claude Code surfaces multiple blocking hooks rather than a real gap, and moved on
+  rather than spend more time chasing it. Separately, actually opening the PR needed two
+  rounds of fixing shell-quoting: PowerShell doesn't support bash-style backslash-escaped
+  quotes, and embedding literal nested quotes in the `claude "run this command: ..."`
+  one-liner kept breaking. Fixed by describing the command in plain language instead of a
+  literal string, letting the agent construct its own correctly-quoted `gh pr create` call.
+- What changed: none to the ship-gate itself — the fixes were all in how I invoked things
+  around it, not in the gate's own configuration.
 
 ---
 
