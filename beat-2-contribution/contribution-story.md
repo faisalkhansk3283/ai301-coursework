@@ -66,10 +66,9 @@ I installed the voice guard (a PreToolUse hook that checks every outgoing `gh` c
 
 I installed the ship-gate (a hook that runs my manifest's checks, then `pr-precheck`, before Claude Code can open a PR) and wrote `ship-manifest.md` for `colombia-open`. My first draft listed `make check`, exactly as `CONTRIBUTING.md` says, but testing it in a fresh terminal revealed `make check` depends on `make build`, which crashed with a `MemoryError` fetching a live dataset — unrelated to my test-only fix. I narrowed the manifest to `make test`/`lint`/`typecheck`/`doctor` and logged the excluded `make build` failure with a dated reason instead of silently dropping it. The ship-gate then passed on the first real run, and `pr-precheck` accepted all four required checks. The only real friction was mechanical: PowerShell's quoting rules broke the literal `gh pr create` command string twice before I switched to describing the command in plain language and letting Claude Code construct its own correctly-quoted call.
 
-**Unit 8: [one line on the tool work]**
+**Unit 8: installed the PR monitor, wrote a playbook, and used its draft to close out a merged PR**
 
-[2-4 sentences: the PR-monitor and your playbook. What it read, what it
-drafted, what you did with the draft.]
+The PR monitor read PR #19 (6 passing checks, merged, one maintainer comment) and drafted a short thank-you for the merged thread. I treated it as a starting point: I rewrote it in my own words in `my-reply.md`, dropped its line about issue #14 possibly still being open, and posted it through Claude Code so my voice guard checked it first. What fell short: the report still showed `REVIEW_REQUIRED` and `mergeable: UNKNOWN` on an already-merged PR, the draft hedged about whether #14 auto-closed instead of checking (it had), and its em dashes came out garbled, which looks like a character-encoding glitch. I left my playbook unchanged, because a merged PR never reaches the nudge or walk-away rules, so this run didn't test them. Its thresholds also rest on only one outside-contributor PR (my own, merged in about 5 hours), so I set them well past that wait and would revise them if a slower review proved them wrong.
 
 ---
 
@@ -395,6 +394,14 @@ than padding in an extra test to chase 100% the issue didn't ask for. Full manif
 (283 existing + 5 new), lint clean, typecheck clean, doctor clean. Committed as
 `test: agregar tests para builders/formats.py` on branch `test/14-formats-coverage`.
 
+**2026-11-07**
+
+Opened PR #19 after the ship-gate passed on its first run. The PR description disclosed that I built before being assigned, despite my claim comment saying I'd wait. davidcasr merged it the same day with no change requests, so there was no iteration round.
+
+**2026-11-08**
+
+Installed the PR monitor and wrote my playbook. `--state` showed the PR as merged. The monitor drafted a short merged-thread close. I rewrote it in `my-reply.md`, left out the "issue may still be open" line, and posted it through Claude Code. The draft also flagged that line 38 of `formats.py` (the `write_json_atomic` failure-path cleanup) is the only uncovered line. I chose not to open a follow-up, since the issue didn't ask for it and I already disclosed the gap in the PR.
+
 **Toolkit**
 
 - Tool: none new this entry (plan-check already covered in Solution Approach; this section
@@ -420,9 +427,17 @@ saying I'd wait — disclosed rather than left silent.
 
 **Maintainer Feedback:**
 
-- 2026-11-06: none yet (PR just opened)
+- 2026-11-07: davidcasr merged the PR directly, with no requested changes, and left this
+  comment: *"Merged, thanks @faisalkhansk3283! Great PR: clear before/after coverage, all
+  four cases covered, and thanks for being upfront about the claim timing. Welcome to
+  colombia-open! 🎉"*
+- 2026-11-08: I replied with a short thank-you (via `my-reply.md`, checked by my voice guard
+  before posting): *"Thanks for merging, and for the kind words — glad the before/after
+  coverage and the note about the claim timing were useful rather than awkward. Good first
+  contribution to make, and a good project to have made it on."* Issue #14 auto-closed via
+  the `Closes #14` line in the PR description.
 
-**Status:** Awaiting review
+**Status:** Merged (2026-11-07)
 
 **Toolkit**
 
@@ -449,25 +464,24 @@ saying I'd wait — disclosed rather than left silent.
 
 **Technical Skills Gained**
 
-[What you learned technically, named concretely.]
+I learned to write tests for code with filesystem side effects using pytest's `tmp_path` and `monkeypatch`: stubbing `ensure_normalized_dir()` so tests never touched the real `data/normalized/`, and forcing `write_parquet` to raise to check that a failed write leaves no target or temp file. I learned that scoping `--cov` to one module can report "never imported" and "no data collected", which is stronger evidence than a low percentage. I used Polars round-trips to confirm that leading-zero codes like `"05"` stay strings, and I followed the repo's Conventional Commits PR-title rule and its Spanish-language docs.
 
 **Challenges Overcome**
 
-[What was hard and how you solved it; point at the real events, the
-Toolkit blocks above are full of them.]
+The first scouted issue (`Tracekit#658`) was claimed by someone else between my scan and my read, and two earlier candidates went stale, so I added an `issue-open` check and re-ran the scan. `make check` crashed with a `MemoryError` inside `make build`, unrelated to my change, so I narrowed the manifest to `make test`/`lint`/`typecheck`/`doctor` and logged the exclusion with its reason. On Windows I fixed a broken `python3` Store stub in my hook and PowerShell quoting problems around `gh pr create`.
 
 **What I'd Do Differently Next Time**
 
-[Reflection on your process.]
+I'd re-check an issue's claim state right before acting, not only at scan time. I'd run the repo's full check command in a fresh terminal on day one, before writing a manifest around it. And I'd wait for the assignment the claim comment promised. Building early worked out here because I disclosed it, but it was a risk I took on my own.
+
+
 
 ---
 
 ## Resources Used
 
-[What actually helped, not a reading list. List things this story
-already shows you using: the doc you followed to set the environment
-up, the thread that explained the bug, the person who answered you.
-One real entry beats ten plausible ones.]
-
-- [Link to documentation that helped]
-- [Discussion, issue, or post that helped]
+- `davidcasr/colombia-open` `CONTRIBUTING.md`: PR-title format, the claim-and-wait rule, the AI-use conditions, and the `make check`/`make doctor` expectations.
+- Issue #14 (https://github.com/davidcasr/colombia-open/issues/14): it named the four test cases and the "Ojo" note about stubbing `ensure_normalized_dir()`.
+- The repo's `docs/troubleshooting/entorno-windows.md`: the Python 3.11 guidance that made `make bootstrap` work on the first run.
+- `tests/builders/test_datasets.py` in the repo: the flat-function style I copied for the new tests.
+- davidcasr's merge comment on PR #19: the maintainer feedback recorded under Pull Request.
